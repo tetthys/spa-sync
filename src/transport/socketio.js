@@ -1,10 +1,13 @@
 // src/transport/socketio.js
 
 /**
- * Attach SpaSync server to Socket.IO instance.
+ * Attach a SpaSync server instance to a Socket.IO server.
  *
- * @param {import("socket.io").Server} io
- * @param {ReturnType<import("../server/createSpaSyncServer").createSpaSyncServer>} spa
+ * Minimal usage:
+ *
+ *   const io = new Server(httpServer);
+ *   const spa = createSpaSyncServer({ actions });
+ *   attachToSocketIO(io, spa);
  */
 function attachToSocketIO(io, spa) {
   io.on("connection", (socket) => {

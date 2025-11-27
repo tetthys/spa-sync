@@ -3,32 +3,56 @@
 const { createActionRegistry } = require("./actionRegistry");
 const { createViewStore } = require("./viewStore");
 const { createContext } = require("./context");
-const { makeActionPacket } = require("../protocol/packets");
 
 /**
- * options.actions: { [actionName]: async function(ctx) {} }
- * options.onAuthorize: async function(socket) => user | null
- * options.onError: function(err, ctx)
+ * Main server factory.
+ *
+ * Minimal usage from the package user's perspective:
+ *
+ *   const spa = createSpaSyncServer({
+ *     actions: {
+ *       "counter.increment": async (ctx) => {
+ *         ctx.view("counter").patch({ value: ctx.payload.value });
+ *       },
+ *     },
+ *   });
+ *
+ *   io.on("connection", (socket) => {
+ *     spa.registerClient(socket);
+ *   });
+ *
+ * All other options are optional:
+ * - onAuthorize?: async (socket) => user | null
+ * - onError?: (err, ctx?) => void
  */
 function createSpaSyncServer(options) {
-  const actions = createActionRegistry(options.actions || {});
+  const opts = options || {};
+
+  const actions = createActionRegistry(opts.actions || {});
   const viewStore = createViewStore();
-  const onAuthorize = options.onAuthorize || (() => null);
-  const onError = options.onError || function () {};
+
+  const onAuthorize =
+    typeof opts.onAuthorize === "function" ? opts.onAuthorize : () => null;
+
+  const onError =
+    typeof opts.onError === "function"
+      ? opts.onError
+      : function () {
+          // Default: do nothing. Users can override this to log errors.
+        };
 
   // clientId -> { socket, user }
   const clients = new Map();
 
   /**
    * Called when a socket connects.
+   * This method is the only thing the user has to call on connection.
    */
   async function registerClient(socket) {
     try {
-      // Resolve user (optional)
       const user = await onAuthorize(socket);
       clients.set(socket.id, { socket, user });
 
-      // Register message listener
       socket.on("message", (packet) => {
         handlePacket(socket, packet).catch((err) => {
           onError(err);
@@ -45,26 +69,74 @@ function createSpaSyncServer(options) {
   }
 
   /**
-   * Handle incoming packet from client.
+   * Handle incoming packets from a given socket.
+   * Currently only "action" packets are supported.
    */
   async function handlePacket(socket, packet) {
-    // Basic validation
     if (!packet || typeof packet !== "object") return;
+
     if (packet.type === "action") {
       const { name, payload, meta } = packet;
       const fn = actions.get(name);
+
       if (!fn) {
-        // Unknown action → send error
         socket.emit("message", {
           type: "error",
           name: "UnknownAction",
           message: "Unknown action: " + name,
-          meta: { action: name, requestId: meta && meta.requestId },
+          meta: {
+            action: name,
+            // requestId is optional; forward if present, else undefined
+            requestId: meta && meta.requestId,
+          },
         });
         return;
       }
 
       const client = clients.get(socket.id) || { socket, user: null };
+
+      // Send back only to the current socket
+      const send = (outPacket) => {
+        socket.emit("message", outPacket);
+      };
+
+      // Broadcast to all other clients
+      const broadcastToOthers = (outPacket) => {
+        clients.forEach((c, id) => {
+          if (id !== socket.id) {
+            c.socket.emit("message", outPacket);
+          }
+        });
+      };
+
+      // Broadcast to everyone (including the sender)
+      const broadcastToAll = (outPacket) => {
+        clients.forEach((c) => {
+          c.socket.emit("message", outPacket);
+        });
+      };
+
+      /**
+       * Broadcast to clients that match the given filter function.
+       *
+       * filterFn receives an object:
+       *   { id, socket, user }
+       */
+      const broadcastTo = (filterFn, outPacket) => {
+        if (typeof filterFn !== "function") return;
+
+        clients.forEach((c, id) => {
+          const shouldSend = filterFn({
+            id,
+            socket: c.socket,
+            user: c.user,
+          });
+
+          if (shouldSend) {
+            c.socket.emit("message", outPacket);
+          }
+        });
+      };
 
       const ctx = createContext({
         socket,
@@ -72,14 +144,10 @@ function createSpaSyncServer(options) {
         payload: payload || {},
         meta: meta || {},
         viewStore,
-        send: (packet) => socket.emit("message", packet),
-        broadcastToOthers: (packet) => {
-          clients.forEach((c, id) => {
-            if (id !== socket.id) {
-              c.socket.emit("message", packet);
-            }
-          });
-        },
+        send,
+        broadcastToOthers,
+        broadcastToAll,
+        broadcastTo,
       });
 
       try {
@@ -88,9 +156,12 @@ function createSpaSyncServer(options) {
         onError(err, ctx);
         socket.emit("message", {
           type: "error",
-          name: err.name || "Error",
-          message: err.message || "Unknown error",
-          meta: { action: name, requestId: meta && meta.requestId },
+          name: err && err.name ? err.name : "Error",
+          message: err && err.message ? err.message : "Unknown error",
+          meta: {
+            action: name,
+            requestId: meta && meta.requestId,
+          },
         });
       }
     }
