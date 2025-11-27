@@ -86,7 +86,7 @@ describe("SpaSync – onError as an optional error logger", () => {
 
     const spa = createSpaSyncServer({
       actions: {
-        "broken.action": async () => {
+        "broken.action": () => {
           throw new Error("Broken in action");
         },
       },
