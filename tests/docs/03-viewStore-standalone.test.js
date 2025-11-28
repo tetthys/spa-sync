@@ -1,27 +1,26 @@
 // tests/docs/03-viewStore-standalone.test.js
+// Doc-style test: using createViewStore standalone.
 
-// This file documents how the viewStore can be used standalone,
-// without any sockets or server logic.
+const { createViewStore } = require("../..");
 
-const { createViewStore } = require("../../src/server/viewStore");
+describe("03 – viewStore standalone usage", () => {
+  it("stores and retrieves payload for each view key", () => {
+    const store = createViewStore();
 
-describe("viewStore – standalone usage as an in-memory view state container", () => {
-  test("set, get, patch can be used without sockets", () => {
-    // Package users normally use viewStore through ctx.view(...),
-    // but it can also be created and used on its own.
+    // Initially, get() returns an empty object for unknown keys.
+    expect(store.get("counter")).toEqual({});
 
-    const viewStore = createViewStore();
+    // After set(), get() returns the stored payload.
+    store.set("counter", { value: 1 });
+    expect(store.get("counter")).toEqual({ value: 1 });
 
-    // Set an initial snapshot
-    viewStore.set("profile", { name: "Alice", age: 30 });
-    expect(viewStore.get("profile")).toEqual({ name: "Alice", age: 30 });
+    // Overwriting with another set() replaces the payload.
+    store.set("counter", { value: 5 });
+    expect(store.get("counter")).toEqual({ value: 5 });
 
-    // Patch merges fields into the previous state
-    viewStore.patch("profile", { age: 31 });
-    expect(viewStore.get("profile")).toEqual({ name: "Alice", age: 31 });
-
-    // A different viewKey is independent
-    viewStore.set("dashboard", { widgets: ["chart", "table"] });
-    expect(viewStore.get("dashboard")).toEqual({ widgets: ["chart", "table"] });
+    // Another view key does not interfere.
+    store.set("profile", { name: "Alice" });
+    expect(store.get("profile")).toEqual({ name: "Alice" });
+    expect(store.get("counter")).toEqual({ value: 5 });
   });
 });

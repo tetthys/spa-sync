@@ -1,51 +1,22 @@
 // index.js
+// Public entry for the spa-sync backend package.
 
-// Core server factory
-const { createSpaSyncServer } = require("./src/server/createSpaSyncServer");
+const { createSpaSyncServer } = require("./server/createSpaSyncServer");
+const { attachToSocketIO } = require("./transport/socketio");
+const { makeRoutePacket, makeActionPacket } = require("./protocol/packets");
+const { createViewStore } = require("./server/viewStore");
 
-// Socket.IO transport helper
-const { attachToSocketIO } = require("./src/transport/socketio");
-
-// Packet helpers (mainly for clients and tests)
-const {
-  makeActionPacket,
-  makeViewSetPacket,
-  makeViewPatchPacket,
-} = require("./src/protocol/packets");
-
-// Optional: standalone viewStore for advanced/debug use
-const { createViewStore } = require("./src/server/viewStore");
-
-/**
- * Public API of the package.
- *
- * Typical usage:
- *
- *   const { createSpaSyncServer, attachToSocketIO } = require("@tetthys/spa-sync");
- *
- *   const spa = createSpaSyncServer({
- *     actions: {
- *       "counter.increment": async (ctx) => {
- *         const current = ctx.payload.current || 0;
- *         ctx.view("counter").set({ value: current + 1 });
- *       },
- *     },
- *   });
- *
- *   attachToSocketIO(io, spa);
- */
 module.exports = {
-  // Core
+  // Core server
   createSpaSyncServer,
 
-  // Transport
+  // Socket.IO transport helper
   attachToSocketIO,
 
-  // Packet helpers
+  // Protocol helpers (useful for tests and custom clients)
+  makeRoutePacket,
   makeActionPacket,
-  makeViewSetPacket,
-  makeViewPatchPacket,
 
-  // Advanced / debugging
+  // View payload store (can be used standalone in some apps/tests)
   createViewStore,
 };

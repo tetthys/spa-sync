@@ -1,51 +1,46 @@
 // src/protocol/packets.js
+// ECOSYSTEM_DSL route packet builder.
 
 /**
- * Create action packet (client → server).
- * This is mainly for reference and tests; real clients will usually
- * construct these packets in their own code.
+ * Create a spa.route DSL object.
+ *
+ * Shape:
+ * {
+ *   kind: "spa.route",
+ *   navigation: { action, target?, url? } | null,
+ *   view: { key, props? } | null,
+ *   payload: {},
+ *   flashes: {},
+ *   meta: {}
+ * }
+ */
+function makeRoutePacket(dsl = {}) {
+  return {
+    kind: "spa.route",
+    navigation:
+      dsl.navigation && typeof dsl.navigation === "object"
+        ? dsl.navigation
+        : null,
+    view: dsl.view && typeof dsl.view === "object" ? dsl.view : null,
+    payload: dsl.payload && typeof dsl.payload === "object" ? dsl.payload : {},
+    flashes: dsl.flashes && typeof dsl.flashes === "object" ? dsl.flashes : {},
+    meta: dsl.meta && typeof dsl.meta === "object" ? dsl.meta : {},
+  };
+}
+
+/**
+ * Action packet (client → server)
  */
 function makeActionPacket(name, payload, meta) {
   return {
     type: "action",
     name,
     payload: payload || {},
-    // meta is a generic metadata bag; requestId is optional
-    meta: meta || {},
-  };
-}
-
-/**
- * Create full view snapshot packet (server → client).
- * The client can interpret this as "replace the entire view state".
- */
-function makeViewSetPacket(viewKey, state, meta) {
-  return {
-    type: "view",
-    kind: "set",
-    view: viewKey,
-    state: state,
-    meta: meta || {},
-  };
-}
-
-/**
- * Create partial view patch packet (server → client).
- * The client can interpret this as "merge this partial state into
- * the existing view state".
- */
-function makeViewPatchPacket(viewKey, patch, meta) {
-  return {
-    type: "view",
-    kind: "patch",
-    view: viewKey,
-    patch: patch,
     meta: meta || {},
   };
 }
 
 module.exports = {
+  makeRoutePacket,
   makeActionPacket,
-  makeViewSetPacket,
-  makeViewPatchPacket,
 };
